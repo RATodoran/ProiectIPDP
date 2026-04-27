@@ -126,7 +126,6 @@ public final class RomanianSAN {
     }
 
     private static String pieceLetterFromPromotion(char promo) {
-        // promo e 'Q'/'R'/'B'/'N' sau similar
         return switch (Character.toUpperCase(promo)) {
             case 'Q' -> "D";
             case 'R' -> "T";
@@ -135,7 +134,6 @@ public final class RomanianSAN {
             default -> "D";
         };
     }
-
     private static String toSquare(Position p) {
         return "" + fileChar(p.col()) + rankNum(p.row());
     }

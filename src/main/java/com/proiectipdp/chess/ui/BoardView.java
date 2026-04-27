@@ -5,6 +5,7 @@ import com.proiectipdp.chess.core.Move;
 import com.proiectipdp.chess.core.Position;
 import com.proiectipdp.chess.core.rules.RulesEngine;
 import com.proiectipdp.chess.core.rules.RulesUtil;
+
 import javafx.geometry.Insets;
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
@@ -16,33 +17,48 @@ import java.util.Map;
 
 public class BoardView extends GridPane {
 
-    // Culori extrase din poza ta
     private static final Color LIGHT = Color.web("#D7D4D4");
     private static final Color DARK  = Color.web("#807B76");
     private static final int TILE_SIZE = 72;
+
     private Runnable onStateChanged;
+
     private final StackPane[][] tiles = new StackPane[8][8];
     private final Map<Character, Image> pieceImages = new HashMap<>();
 
     private final GameState state;
     private final RulesEngine engine;
 
-    // selecție curentă
     private int selectedRow = -1;
     private int selectedCol = -1;
+
+    private boolean flipped = false;
+
+    private boolean showMoves = false;
+    private boolean allowIllegal = false;
+    private boolean illegalMoveMade = false;
+
+    public void setShowMoves(boolean value) { this.showMoves = value; }
+    public void setAllowIllegal(boolean value) { this.allowIllegal = value; }
+
+    public boolean hasIllegalMove() { return illegalMoveMade; }
+    public boolean isFlipped() { return flipped; }
+
+    public void flipBoard() {
+        flipped = !flipped;
+        renderFromState();
+    }
 
     public void setOnStateChanged(Runnable onStateChanged) {
         this.onStateChanged = onStateChanged;
     }
+
     public BoardView(GameState state, RulesEngine engine) {
         this.state = state;
         this.engine = engine;
 
-        setHgap(0);
-        setVgap(0);
         setPadding(new Insets(10));
 
-        // fundal discret în jurul tablei
         setBackground(new Background(
                 new BackgroundFill(Color.web("#1E1E1E"), new CornerRadii(12), Insets.EMPTY)
         ));
@@ -57,11 +73,13 @@ public class BoardView extends GridPane {
 
         for (int row = 0; row < 8; row++) {
             for (int col = 0; col < 8; col++) {
+
                 StackPane tile = createTile(row, col);
                 tiles[row][col] = tile;
 
                 final int r = row;
                 final int c = col;
+
                 tile.setOnMouseClicked(e -> handleClick(r, c));
 
                 add(tile, col, row);
@@ -76,74 +94,70 @@ public class BoardView extends GridPane {
         tile.setPrefSize(TILE_SIZE, TILE_SIZE);
 
         Color base = isLight ? LIGHT : DARK;
+
         tile.setBackground(new Background(new BackgroundFill(base, CornerRadii.EMPTY, Insets.EMPTY)));
-
-        // hover efect (dar păstrează selecția)
-        tile.setOnMouseEntered(e -> {
-            if (!(row == selectedRow && col == selectedCol)) {
-                tile.setBorder(new Border(
-                        new BorderStroke(Color.web("#F2C14E"), BorderStrokeStyle.SOLID, CornerRadii.EMPTY, new BorderWidths(2))
-                ));
-            }
-        });
-
-        tile.setOnMouseExited(e -> {
-            if (!(row == selectedRow && col == selectedCol)) {
-                tile.setBorder(null);
-            }
-        });
 
         return tile;
     }
 
-    // ===== click logic =====
     private void handleClick(int row, int col) {
-        char clicked = state.getBoard().get(row, col);
 
-        // dacă nu e nimic selectat
+        int realRow = flipped ? 7 - row : row;
+        int realCol = flipped ? 7 - col : col;
+
+        char clicked = state.getBoard().get(realRow, realCol);
+
         if (selectedRow == -1) {
-            if (clicked == '#') return;
 
-            // selectează doar piesa jucătorului curent
+            if (clicked == '#') return;
             if (RulesUtil.colorOf(clicked) != state.getTurn()) return;
 
-            select(row, col);
+            select(realRow, realCol);
             return;
         }
 
-        // click pe aceeași piesă => deselect
-        if (row == selectedRow && col == selectedCol) {
+        if (realRow == selectedRow && realCol == selectedCol) {
             deselect();
             return;
         }
 
-        // dacă dai click pe o piesă de aceeași culoare => schimbă selecția
-        if (clicked != '#') {
-            if (RulesUtil.colorOf(clicked) == state.getTurn()) {
-                select(row, col);
-            } else {
-                // piesă adversă => încercare captură
-                tryMove(selectedRow, selectedCol, row, col);
-            }
-            return;
-        }
-
-        // pătrat gol => încercare mutare
-        tryMove(selectedRow, selectedCol, row, col);
+        tryMove(selectedRow, selectedCol, realRow, realCol);
     }
 
     private void tryMove(int fromRow, int fromCol, int toRow, int toCol) {
-        Move move = new Move(new Position(fromRow, fromCol), new Position(toRow, toCol));
 
-        boolean ok = engine.tryMove(state, move);
+        Move move = new Move(
+                new Position(fromRow, fromCol),
+                new Position(toRow, toCol),
+                null
+        );
+
+        boolean ok;
+
+        if (allowIllegal) {
+
+            // verificăm dacă era legală
+            GameState copy = state.copy();
+            boolean legal = engine.tryMove(copy, move);
+
+            // aplicăm mutarea forțat (folosim engine pe state real)
+            engine.tryMove(state, move); // chiar dacă e ilegală, o forțăm
+
+            ok = true;
+
+            if (!legal) {
+                illegalMoveMade = true;
+            }
+
+        } else {
+            ok = engine.tryMove(state, move);
+        }
 
         deselect();
 
         if (ok) {
             renderFromState();
             if (onStateChanged != null) onStateChanged.run();
-        } else {
-            // opțional: feedback vizual/sonor; momentan doar ignorăm
         }
     }
 
@@ -153,64 +167,105 @@ public class BoardView extends GridPane {
         selectedRow = row;
         selectedCol = col;
 
-        tiles[row][col].setBorder(new Border(
-                new BorderStroke(Color.web("#F2C14E"), BorderStrokeStyle.SOLID, CornerRadii.EMPTY, new BorderWidths(3))
+        int displayRow = flipped ? 7 - row : row;
+        int displayCol = flipped ? 7 - col : col;
+
+        tiles[displayRow][displayCol].setBorder(new Border(
+                new BorderStroke(Color.web("#F2C14E"),
+                        BorderStrokeStyle.SOLID,
+                        CornerRadii.EMPTY,
+                        new BorderWidths(3))
         ));
+
+        if (showMoves) {
+            highlightMoves(row, col);
+        }
     }
 
     private void deselect() {
-        if (selectedRow != -1) {
-            tiles[selectedRow][selectedCol].setBorder(null);
-        }
+        renderFromState();
         selectedRow = -1;
         selectedCol = -1;
     }
 
-    // ===== render =====
-    private void renderFromState() {
+    // 🔥 FARA getLegalMoves → brute force
+    private void highlightMoves(int row, int col) {
+
         for (int r = 0; r < 8; r++) {
             for (int c = 0; c < 8; c++) {
-                tiles[r][c].getChildren().clear();
-                char code = state.getBoard().get(r, c);
 
-                if (code != '#') {
-                    Image img = pieceImages.get(code);
-                    if (img == null) {
-                        throw new RuntimeException("Nu am imagine pentru piesa: " + code);
-                    }
+                Move move = new Move(
+                        new Position(row, col),
+                        new Position(r, c),
+                        null
+                );
 
-                    ImageView iv = new ImageView(img);
-                    iv.setFitWidth(TILE_SIZE * 0.85);
-                    iv.setFitHeight(TILE_SIZE * 0.85);
-                    iv.setPreserveRatio(true);
-                    iv.setSmooth(true);
+                GameState copy = state.copy();
 
-                    tiles[r][c].getChildren().add(iv);
+                if (engine.tryMove(copy, move)) {
+
+                    int displayRow = flipped ? 7 - r : r;
+                    int displayCol = flipped ? 7 - c : c;
+
+                    tiles[displayRow][displayCol].setStyle(
+                            "-fx-background-color: rgba(0,255,0,0.4);"
+                    );
                 }
             }
         }
     }
 
-    // ===== images =====
-    private void loadPieceImages() {
-        pieceImages.put('P', loadImage("/PieseSah/white_pawn.png"));
-        pieceImages.put('R', loadImage("/PieseSah/white_rook.png"));
-        pieceImages.put('N', loadImage("/PieseSah/white_knight.png"));
-        pieceImages.put('B', loadImage("/PieseSah/white_bishop.png"));
-        pieceImages.put('Q', loadImage("/PieseSah/white_queen.png"));
-        pieceImages.put('K', loadImage("/PieseSah/white_king.png"));
+    private void renderFromState() {
 
-        pieceImages.put('p', loadImage("/PieseSah/black_pawn.png"));
-        pieceImages.put('r', loadImage("/PieseSah/black_rook.png"));
-        pieceImages.put('n', loadImage("/PieseSah/black_knight.png"));
-        pieceImages.put('b', loadImage("/PieseSah/black_bishop.png"));
-        pieceImages.put('q', loadImage("/PieseSah/black_queen.png"));
-        pieceImages.put('k', loadImage("/PieseSah/black_king.png"));
+        for (int displayRow = 0; displayRow < 8; displayRow++) {
+            for (int displayCol = 0; displayCol < 8; displayCol++) {
+
+                tiles[displayRow][displayCol].getChildren().clear();
+                tiles[displayRow][displayCol].setStyle("");
+
+                int boardRow = flipped ? 7 - displayRow : displayRow;
+                int boardCol = flipped ? 7 - displayCol : displayCol;
+
+                char code = state.getBoard().get(boardRow, boardCol);
+
+                if (code != '#') {
+
+                    ImageView iv = new ImageView(pieceImages.get(code));
+
+                    iv.setFitWidth(TILE_SIZE * 0.85);
+                    iv.setFitHeight(TILE_SIZE * 0.85);
+
+                    tiles[displayRow][displayCol].getChildren().add(iv);
+                }
+            }
+        }
     }
 
-    private Image loadImage(String path) {
+    private Image load(String path) {
         var stream = getClass().getResourceAsStream(path);
-        if (stream == null) throw new RuntimeException("Nu găsesc imaginea: " + path);
+        if (stream == null) {
+            System.out.println("NU gasesc: " + path);
+            return null;
+        }
         return new Image(stream);
     }
+
+    private void loadPieceImages() {
+
+        pieceImages.put('P', load("/PieseSah/white_pawn.png"));
+        pieceImages.put('R', load("/PieseSah/white_rook.png"));
+        pieceImages.put('N', load("/PieseSah/white_knight.png"));
+        pieceImages.put('B', load("/PieseSah/white_bishop.png"));
+        pieceImages.put('Q', load("/PieseSah/white_queen.png"));
+        pieceImages.put('K', load("/PieseSah/white_king.png"));
+
+        pieceImages.put('p', load("/PieseSah/black_pawn.png"));
+        pieceImages.put('r', load("/PieseSah/black_rook.png"));
+        pieceImages.put('n', load("/PieseSah/black_knight.png"));
+        pieceImages.put('b', load("/PieseSah/black_bishop.png"));
+        pieceImages.put('q', load("/PieseSah/black_queen.png"));
+        pieceImages.put('k', load("/PieseSah/black_king.png"));
+    }
+    public void forceRender() { renderFromState(); }
+    public void deselectForExternal() { deselect(); }
 }
