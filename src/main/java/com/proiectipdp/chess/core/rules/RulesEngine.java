@@ -26,6 +26,7 @@ public class RulesEngine {
 
         // log
         state.addMoveToLog(san);
+        state.getHistory().record(state.makeSnapshot());
 
         return true;
     }

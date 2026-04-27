@@ -2,6 +2,8 @@ package com.proiectipdp.chess.core;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import com.proiectipdp.chess.core.replay.History;
+import com.proiectipdp.chess.core.replay.Snapshot;
 public class GameState {
 
     private Board board = new Board();
@@ -50,6 +52,12 @@ public class GameState {
     public void setCastleBK(boolean v) { bk = v; }
     public void setCastleBQ(boolean v) { bq = v; }
 
+    private final History history = new History();
+
+    public History getHistory() {
+        return history;
+    }
+
     public Position getEnPassantTarget() { return enPassantTarget; }
     public void setEnPassantTarget(Position p) { enPassantTarget = p; }
 
@@ -75,6 +83,9 @@ public class GameState {
         status = GameStatus.IN_PROGRESS;
 
         moveLog.clear();
+
+        history.clear();
+        history.record(makeSnapshot());
     }
 
     public GameState copy() {
@@ -85,5 +96,48 @@ public class GameState {
         s.enPassantTarget = this.enPassantTarget == null ? null : new Position(this.enPassantTarget.row(), this.enPassantTarget.col());
         s.status = this.status;
         return s;
+    }
+
+    public Snapshot makeSnapshot() {
+        return new Snapshot(
+                board.copySquares(),
+                turn,
+                wk, wq, bk, bq,
+                enPassantTarget == null ? null :
+                        new Position(enPassantTarget.row(), enPassantTarget.col()),
+                status,
+                moveLog
+        );
+    }
+
+    public void loadSnapshot(Snapshot s) {
+
+        board.clear();
+
+        for (int r = 0; r < 8; r++) {
+            for (int c = 0; c < 8; c++) {
+                board.set(r, c, s.board[r][c]);
+            }
+        }
+
+        turn = s.turn;
+
+        wk = s.wk;
+        wq = s.wq;
+        bk = s.bk;
+        bq = s.bq;
+
+        enPassantTarget =
+                s.enPassantTarget == null
+                        ? null
+                        : new Position(
+                        s.enPassantTarget.row(),
+                        s.enPassantTarget.col()
+                );
+
+        status = s.status;
+
+        moveLog.clear();
+        moveLog.addAll(s.moveLog);
     }
 }
