@@ -3,28 +3,25 @@ package com.proiectipdp.chess;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
-import javafx.scene.control.Button;
-import javafx.scene.control.Label;
+import javafx.scene.control.*;
 import javafx.scene.effect.DropShadow;
 import javafx.scene.effect.GaussianBlur;
-import javafx.scene.layout.BorderPane;
-import javafx.scene.layout.StackPane;
-import javafx.scene.layout.VBox;
+import javafx.scene.layout.*;
 import javafx.scene.paint.Color;
 import javafx.scene.shape.Circle;
 
-public class StartView {
+public class LoginView {
 
     private Scene scene;
 
-    public StartView(MainApp mainApp) {
+    public LoginView(MainApp mainApp) {
 
-        // ===== STYLES =====
+
         String mainBackgroundStyle =
                 "-fx-background-color: linear-gradient(to bottom right, #0d1117, #161b22, #252018);";
 
         String cardStyle =
-                "-fx-background-color: rgba(18, 22, 27, 0.90);" +
+                "-fx-background-color: rgba(18, 22, 27, 0.92);" +
                         "-fx-background-radius: 30;" +
                         "-fx-border-color: rgba(218, 165, 75, 0.45);" +
                         "-fx-border-radius: 30;" +
@@ -32,13 +29,24 @@ public class StartView {
                         "-fx-padding: 45 60 45 60;";
 
         String titleStyle =
-                "-fx-font-size: 42px;" +
+                "-fx-font-size: 38px;" +
                         "-fx-font-weight: bold;" +
                         "-fx-text-fill: white;";
 
         String subtitleStyle =
                 "-fx-font-size: 14px;" +
                         "-fx-text-fill: #bfc7d0;";
+
+        String fieldStyle =
+                "-fx-background-color: rgba(255, 255, 255, 0.08);" +
+                        "-fx-background-radius: 14;" +
+                        "-fx-border-color: rgba(244, 210, 122, 0.35);" +
+                        "-fx-border-radius: 14;" +
+                        "-fx-border-width: 1;" +
+                        "-fx-text-fill: white;" +
+                        "-fx-prompt-text-fill: #8d98a4;" +
+                        "-fx-font-size: 14px;" +
+                        "-fx-padding: 11 14 11 14;";
 
         String primaryButtonStyle =
                 "-fx-background-color: linear-gradient(to right, #f4d27a, #c9963e, #8e5c1d);" +
@@ -111,48 +119,66 @@ public class StartView {
 
         Label crown = new Label("♛");
         crown.setTextFill(Color.rgb(244, 210, 122, 0.95));
-        crown.setStyle("-fx-font-size: 48px;");
+        crown.setStyle("-fx-font-size: 46px;");
 
-        Label title = new Label("Chess Game");
+        Label title = new Label("Logare");
         title.setStyle(titleStyle);
 
-        Label subtitle = new Label("Pregătește partida și intră pe tablă");
+        Label subtitle = new Label("Intră în cont pentru a continua");
         subtitle.setStyle(subtitleStyle);
 
         VBox titleBox = new VBox(4, crown, title, subtitle);
         titleBox.setAlignment(Pos.CENTER);
 
 
-        Button btnJoaca = new Button("Joacă!");
-        Button btnLogin = new Button("Logare");
+        TextField usernameField = new TextField();
+        usernameField.setPromptText("Username");
+        usernameField.setPrefWidth(300);
+        usernameField.setStyle(fieldStyle);
 
-        btnJoaca.setPrefWidth(260);
-        btnLogin.setPrefWidth(260);
+        PasswordField passwordField = new PasswordField();
+        passwordField.setPromptText("Parolă");
+        passwordField.setPrefWidth(300);
+        passwordField.setStyle(fieldStyle);
 
-        btnJoaca.setStyle(primaryButtonStyle);
-        btnLogin.setStyle(secondaryButtonStyle);
+        Label messageLabel = new Label("");
+        messageLabel.setTextFill(Color.rgb(244, 210, 122, 0.95));
+        messageLabel.setStyle("-fx-font-size: 12px;");
+
+        VBox formBox = new VBox(14, usernameField, passwordField, messageLabel);
+        formBox.setAlignment(Pos.CENTER);
+
+
+        Button loginBtn = new Button("Login și continuă");
+        Button backBtn = new Button("Înapoi");
+
+        loginBtn.setPrefWidth(260);
+        backBtn.setPrefWidth(260);
+
+        loginBtn.setStyle(primaryButtonStyle);
+        backBtn.setStyle(secondaryButtonStyle);
 
         DropShadow buttonShadow = new DropShadow();
         buttonShadow.setColor(Color.rgb(244, 210, 122, 0.35));
         buttonShadow.setRadius(18);
         buttonShadow.setSpread(0.18);
-        btnJoaca.setEffect(buttonShadow);
+        loginBtn.setEffect(buttonShadow);
 
-        btnJoaca.setOnMouseEntered(e -> btnJoaca.setStyle(primaryButtonHoverStyle));
-        btnJoaca.setOnMouseExited(e -> btnJoaca.setStyle(primaryButtonStyle));
+        loginBtn.setOnMouseEntered(e -> loginBtn.setStyle(primaryButtonHoverStyle));
+        loginBtn.setOnMouseExited(e -> loginBtn.setStyle(primaryButtonStyle));
 
-        btnLogin.setOnMouseEntered(e -> btnLogin.setStyle(secondaryButtonHoverStyle));
-        btnLogin.setOnMouseExited(e -> btnLogin.setStyle(secondaryButtonStyle));
+        backBtn.setOnMouseEntered(e -> backBtn.setStyle(secondaryButtonHoverStyle));
+        backBtn.setOnMouseExited(e -> backBtn.setStyle(secondaryButtonStyle));
 
-        VBox buttonBox = new VBox(15, btnJoaca, btnLogin);
+        VBox buttonBox = new VBox(14, loginBtn, backBtn);
         buttonBox.setAlignment(Pos.CENTER);
 
-        Label footer = new Label("♙  Choose your move  ♙");
+        Label footer = new Label("♙  Welcome back, player  ♙");
         footer.setTextFill(Color.rgb(255, 255, 255, 0.35));
         footer.setStyle("-fx-font-size: 12px;");
 
 
-        VBox card = new VBox(34, titleBox, buttonBox, footer);
+        VBox card = new VBox(30, titleBox, formBox, buttonBox, footer);
         card.setAlignment(Pos.CENTER);
         card.setMaxWidth(560);
         card.setStyle(cardStyle);
@@ -178,7 +204,7 @@ public class StartView {
         BorderPane.setAlignment(leftPiece, Pos.CENTER_LEFT);
         BorderPane.setAlignment(rightPiece, Pos.CENTER_RIGHT);
 
-        // ===== STACK BACKGROUND + CONTENT =====
+
         StackPane stack = new StackPane();
 
         StackPane.setAlignment(glow1, Pos.TOP_LEFT);
@@ -192,14 +218,23 @@ public class StartView {
         scene = new Scene(stack, 900, 650);
 
 
-        btnJoaca.setOnAction(e -> {
-            GameSettingsView settings = new GameSettingsView(mainApp);
-            mainApp.setScene(settings.getScene());
+        loginBtn.setOnAction(e -> {
+            String username = usernameField.getText();
+            String password = passwordField.getText();
+
+            if (username.isEmpty() || password.isEmpty()) {
+                messageLabel.setText("Completează username-ul și parola.");
+            } else {
+                System.out.println("Login pentru: " + username);
+
+                GameSettingsView settings = new GameSettingsView(mainApp);
+                mainApp.setScene(settings.getScene());
+            }
         });
 
-        btnLogin.setOnAction(e -> {
-            LoginView loginView = new LoginView(mainApp);
-            mainApp.setScene(loginView.getScene());
+        backBtn.setOnAction(e -> {
+            StartView startView = new StartView(mainApp);
+            mainApp.setScene(startView.getScene());
         });
     }
 

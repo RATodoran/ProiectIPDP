@@ -91,19 +91,76 @@ public class MainApp extends Application {
         HBox clocks = new HBox(12, whiteClock, blackClock);
         clocks.setAlignment(Pos.CENTER);
 
-        Timeline timer = new Timeline(
+        final boolean[] gameOverByTime = {false};
+        final Timeline[] timerRef = new Timeline[1];
+
+        timerRef[0] = new Timeline(
                 new KeyFrame(Duration.seconds(1), e -> {
+
+                    if (gameOverByTime[0]) return;
+
                     if (state.getTurn().name().equals("WHITE")) {
+
                         whiteTime.set(whiteTime.get() - 1);
+
+                        if (whiteTime.get() <= 0) {
+                            whiteTime.set(0);
+                            whiteClock.setText(formatTime(whiteTime.get()));
+
+                            gameOverByTime[0] = true;
+                            timerRef[0].stop();
+
+                            boardView.setDisable(true);
+                            boardView.setMouseTransparent(true);
+
+                            statusLabel.setText("Negru a câștigat la timp!");
+                            statusLabel.setTextFill(Color.web("#F2C14E"));
+
+                            Alert alert = new Alert(Alert.AlertType.INFORMATION);
+                            alert.setTitle("Final de joc");
+                            alert.setHeaderText("Timp expirat");
+                            alert.setContentText("Negru a câștigat la timp!");
+                            alert.showAndWait();
+
+                            return;
+                        }
+
                         whiteClock.setText(formatTime(whiteTime.get()));
+
                     } else {
+
                         blackTime.set(blackTime.get() - 1);
+
+                        if (blackTime.get() <= 0) {
+                            blackTime.set(0);
+                            blackClock.setText(formatTime(blackTime.get()));
+
+                            gameOverByTime[0] = true;
+                            timerRef[0].stop();
+
+                            boardView.setDisable(true);
+                            boardView.setMouseTransparent(true);
+
+                            statusLabel.setText("Alb a câștigat la timp!");
+                            statusLabel.setTextFill(Color.web("#F2C14E"));
+
+                            Alert alert = new Alert(Alert.AlertType.INFORMATION);
+                            alert.setTitle("Final de joc");
+                            alert.setHeaderText("Timp expirat");
+                            alert.setContentText("Alb a câștigat la timp!");
+                            alert.showAndWait();
+
+                            return;
+                        }
+
                         blackClock.setText(formatTime(blackTime.get()));
                     }
                 })
         );
-        timer.setCycleCount(Timeline.INDEFINITE);
-        timer.play();
+
+        timerRef[0].setCycleCount(Timeline.INDEFINITE);
+        timerRef[0].play();
+
 
         TableView<MoveRow> movesTable = new TableView<>();
 
@@ -492,9 +549,15 @@ public class MainApp extends Application {
         };
     }
 
-    private String formatTime(int seconds){
+
+    private String formatTime(int seconds) {
+        if (seconds <= 0) {
+            return "00:00";
+        }
+
         int m = seconds / 60;
         int s = seconds % 60;
+
         return String.format("%02d:%02d", m, s);
     }
 
