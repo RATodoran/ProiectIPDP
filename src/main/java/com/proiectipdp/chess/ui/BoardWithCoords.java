@@ -22,6 +22,11 @@ public class BoardWithCoords extends GridPane {
         // 🔢 NUMERE (stânga)
         for (int row = 0; row < 8; row++) {
             Label num = new Label(getNumber(row));
+            num.setStyle(
+                    "-fx-text-fill: white;" +
+                            "-fx-font-size: 16px;" +
+                            "-fx-font-weight: bold;"
+            );
             num.setPrefHeight(72);
             num.setMinWidth(20);
             num.setAlignment(Pos.CENTER);
@@ -32,6 +37,11 @@ public class BoardWithCoords extends GridPane {
         // 🔤 LITERE (jos)
         for (int col = 0; col < 8; col++) {
             Label let = new Label(getLetter(col));
+            let.setStyle(
+                    "-fx-text-fill: white;" +
+                            "-fx-font-size: 16px;" +
+                            "-fx-font-weight: bold;"
+            );
             let.setPrefWidth(72);
             let.setAlignment(Pos.CENTER);
 

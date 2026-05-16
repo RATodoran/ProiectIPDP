@@ -1,5 +1,5 @@
 package com.proiectipdp.chess;
-
+import com.proiectipdp.chess.client.ChessServerClient;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
@@ -16,6 +16,7 @@ public class GameSettingsView {
 
     private int selectedTime = 10; // default
     private String selectedColor = "WHITE"; // default
+
 
     public GameSettingsView(MainApp mainApp) {
 
@@ -222,9 +223,65 @@ public class GameSettingsView {
         startBtn.setOnMouseExited(e -> startBtn.setStyle(buttonStyle));
 
         startBtn.setOnAction(e -> {
-            mainApp.showGame(selectedTime, selectedColor);
-        });
+            startBtn.setDisable(true);
+            startBtn.setText("Se caută adversar...");
 
+            new Thread(() -> {
+                try {
+
+                    ChessServerClient serverClient =
+                            new ChessServerClient("http://192.168.0.105:8081");
+
+                    String response = serverClient.joinGame("Razvan");
+
+                    System.out.println("Răspuns server: " + response);
+
+                    javafx.application.Platform.runLater(() -> {
+
+                        if (response.startsWith("Waiting")) {
+                            startBtn.setDisable(false);
+                            startBtn.setText("Se caută adversar...");
+
+                            Alert alert = new Alert(Alert.AlertType.INFORMATION);
+                            alert.setTitle("Matchmaking");
+                            alert.setHeaderText(null);
+                            alert.setContentText("Cererea a fost trimisă. Așteaptă adversar.");
+                            alert.showAndWait();
+
+                            return;
+                        }
+
+                        if (response.startsWith("Game started")) {
+                            mainApp.showGame(selectedTime, selectedColor);
+                            return;
+                        }
+
+                        startBtn.setDisable(false);
+                        startBtn.setText("Start Game");
+
+                        Alert alert = new Alert(Alert.AlertType.ERROR);
+                        alert.setTitle("Răspuns necunoscut");
+                        alert.setHeaderText("Serverul a răspuns neașteptat.");
+                        alert.setContentText(response);
+                        alert.showAndWait();
+                    });
+
+                } catch (Exception ex) {
+                    ex.printStackTrace();
+
+                    javafx.application.Platform.runLater(() -> {
+                        startBtn.setDisable(false);
+                        startBtn.setText("Start Game");
+
+                        Alert alert = new Alert(Alert.AlertType.ERROR);
+                        alert.setTitle("Eroare server");
+                        alert.setHeaderText("Nu s-a putut trimite cererea de joc.");
+                        alert.setContentText(ex.getMessage());
+                        alert.showAndWait();
+                    });
+                }
+            }).start();
+        });
         Label footer = new Label("♙  Ready for battle  ♙");
         footer.setTextFill(Color.rgb(255, 255, 255, 0.35));
         footer.setStyle("-fx-font-size: 12px;");

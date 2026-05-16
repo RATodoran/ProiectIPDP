@@ -37,6 +37,11 @@ public class BoardView extends GridPane {
     private boolean showMoves = false;
     private boolean allowIllegal = false;
     private boolean illegalMoveMade = false;
+    private String illegalMoveColor = null;
+
+    public String getIllegalMoveColor() {
+        return illegalMoveColor;
+    }
 
     public void setShowMoves(boolean value) { this.showMoves = value; }
     public void setAllowIllegal(boolean value) { this.allowIllegal = value; }
@@ -136,17 +141,34 @@ public class BoardView extends GridPane {
 
         if (allowIllegal) {
 
-            // verificăm dacă era legală
             GameState copy = state.copy();
             boolean legal = engine.tryMove(copy, move);
 
-            // aplicăm mutarea forțat (folosim engine pe state real)
-            engine.tryMove(state, move); // chiar dacă e ilegală, o forțăm
+            if (legal) {
+                ok = engine.tryMove(state, move);
+            } else {
+                char piece = state.getBoard().get(fromRow, fromCol);
+                char captured = state.getBoard().get(toRow, toCol);
 
-            ok = true;
+                state.getBoard().set(toRow, toCol, piece);
+                state.getBoard().set(fromRow, fromCol, '#');
 
-            if (!legal) {
                 illegalMoveMade = true;
+
+                illegalMoveColor = RulesUtil.colorOf(piece).name();
+
+                // marcăm vizual mutarea ilegală
+                int displayToRow = flipped ? 7 - toRow : toRow;
+                int displayToCol = flipped ? 7 - toCol : toCol;
+
+                ok = true;
+
+                // schimbăm rândul manual
+                state.setTurn(
+                        state.getTurn().name().equals("WHITE")
+                                ? com.proiectipdp.chess.core.Color.BLACK
+                                : com.proiectipdp.chess.core.Color.WHITE
+                );
             }
 
         } else {
@@ -157,10 +179,11 @@ public class BoardView extends GridPane {
 
         if (ok) {
             renderFromState();
+
+
             if (onStateChanged != null) onStateChanged.run();
         }
     }
-
     private void select(int row, int col) {
         deselect();
 
@@ -169,14 +192,14 @@ public class BoardView extends GridPane {
 
         int displayRow = flipped ? 7 - row : row;
         int displayCol = flipped ? 7 - col : col;
-
+        /*
         tiles[displayRow][displayCol].setBorder(new Border(
                 new BorderStroke(Color.web("#F2C14E"),
                         BorderStrokeStyle.SOLID,
                         CornerRadii.EMPTY,
                         new BorderWidths(3))
         ));
-
+       */
         if (showMoves) {
             highlightMoves(row, col);
         }
@@ -188,7 +211,7 @@ public class BoardView extends GridPane {
         selectedCol = -1;
     }
 
-    // 🔥 FARA getLegalMoves → brute force
+
     private void highlightMoves(int row, int col) {
 
         for (int r = 0; r < 8; r++) {
