@@ -228,40 +228,67 @@ public class GameSettingsView {
 
             new Thread(() -> {
                 try {
-
                     ChessServerClient serverClient =
-                            new ChessServerClient("http://192.168.0.105:8081");
+                            new ChessServerClient("http://localhost:8081");
 
-                    String response = serverClient.joinGame("Razvan");
+                    String playerId = "player-" + System.currentTimeMillis();
+                    String response = serverClient.joinGame(playerId);
 
                     System.out.println("Răspuns server: " + response);
 
-                    javafx.application.Platform.runLater(() -> {
+                    if (response.startsWith("Game started")) {
+                        String gameId = serverClient.extractGameId(response);
+                        String gameJson = serverClient.getGameState(gameId);
+                        String assignedColor = serverClient.determinePlayerColor(gameJson, playerId);
 
-                        if (response.startsWith("Waiting")) {
-                            startBtn.setDisable(false);
+                        javafx.application.Platform.runLater(() -> {
+                            mainApp.showGame(selectedTime, assignedColor, gameId, playerId);
+                        });
+
+                        return;
+                    }
+
+                    if (response.startsWith("Waiting")) {
+                        javafx.application.Platform.runLater(() -> {
                             startBtn.setText("Se caută adversar...");
 
                             Alert alert = new Alert(Alert.AlertType.INFORMATION);
                             alert.setTitle("Matchmaking");
                             alert.setHeaderText(null);
-                            alert.setContentText("Cererea a fost trimisă. Așteaptă adversar.");
-                            alert.showAndWait();
+                            alert.setContentText("Cererea a fost trimisă. Se caută adversar...");
+                            alert.show();
+                        });
 
-                            return;
+                        while (true) {
+                            Thread.sleep(1000);
+
+                            String gameResponse = serverClient.getGameByPlayer(playerId);
+                            String gameId = serverClient.extractGameIdFromJson(gameResponse);
+
+                            if (gameId != null) {
+                                String assignedColor = serverClient.determinePlayerColor(gameResponse, playerId);
+
+                                System.out.println("Meci găsit pentru primul client. Game ID: " + gameId);
+                                System.out.println("Culoare asignată: " + assignedColor);
+
+                                javafx.application.Platform.runLater(() -> {
+                                    mainApp.showGame(selectedTime, assignedColor, gameId, playerId);
+                                });
+
+                                break;
+                            }
                         }
 
-                        if (response.startsWith("Game started")) {
-                            mainApp.showGame(selectedTime, selectedColor);
-                            return;
-                        }
+                        return;
+                    }
 
+                    javafx.application.Platform.runLater(() -> {
                         startBtn.setDisable(false);
                         startBtn.setText("Start Game");
 
                         Alert alert = new Alert(Alert.AlertType.ERROR);
                         alert.setTitle("Răspuns necunoscut");
-                        alert.setHeaderText("Serverul a răspuns neașteptat.");
+                        alert.setHeaderText(null);
                         alert.setContentText(response);
                         alert.showAndWait();
                     });
@@ -282,6 +309,7 @@ public class GameSettingsView {
                 }
             }).start();
         });
+
         Label footer = new Label("♙  Ready for battle  ♙");
         footer.setTextFill(Color.rgb(255, 255, 255, 0.35));
         footer.setStyle("-fx-font-size: 12px;");

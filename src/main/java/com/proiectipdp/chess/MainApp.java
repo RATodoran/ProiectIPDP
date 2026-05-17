@@ -45,7 +45,7 @@ public class MainApp extends Application {
         stage.show();
     }
 
-    public void showGame(int minutes, String color) {
+    public void showGame(int minutes, String color, String gameId, String playerId) {
 
         GameState state = new GameState();
         RulesEngine engine = new RulesEngine();
@@ -53,9 +53,47 @@ public class MainApp extends Application {
         if (color.equals("RANDOM")) {
             color = Math.random() < 0.5 ? "WHITE" : "BLACK";
         }
+        final String playerColor = color;
+        final int[] syncedMoveCount = {0};
 
         BoardView boardView = new BoardView(state, engine);
 
+        boardView.setOnMoveMade(moveInfo -> {
+
+            // mutarea a fost deja aplicată local, deci o considerăm sincronizată local
+            // ca polling-ul să nu încerce să o aplice încă o dată
+            syncedMoveCount[0]++;
+
+            new Thread(() -> {
+
+                try {
+
+                    com.proiectipdp.chess.client.ChessServerClient serverClient =
+                            new com.proiectipdp.chess.client.ChessServerClient(
+                                    "http://localhost:8081"
+                            );
+
+                    String response = serverClient.sendMove(
+                            gameId,
+                            playerId,
+                            moveInfo.fromRow(),
+                            moveInfo.fromCol(),
+                            moveInfo.toRow(),
+                            moveInfo.toCol()
+                    );
+
+                    System.out.println("Mutare trimisă către server: " + response);
+
+                    if (!"Move added".equals(response)) {
+                        System.out.println("Serverul nu a acceptat mutarea: " + response);
+                    }
+
+                } catch (Exception ex) {
+                    ex.printStackTrace();
+                }
+
+            }).start();
+        });
         if (color.equals("BLACK")) {
             boardView.flipBoard();
         }
@@ -262,12 +300,27 @@ public class MainApp extends Application {
                 if (response == yes) {
 
                     String winner;
+                    String resultCode;
 
-                    if (state.getTurn().name().equals("WHITE")) {
+                    if (playerColor.equals("WHITE")) {
                         winner = "Negru";
+                        resultCode = "BLACK_WIN";
                     } else {
                         winner = "Alb";
+                        resultCode = "WHITE_WIN";
                     }
+
+                    new Thread(() -> {
+                        try {
+                            com.proiectipdp.chess.client.ChessServerClient serverClient =
+                                    new com.proiectipdp.chess.client.ChessServerClient("http://localhost:8081");
+
+                            serverClient.endGame(gameId, resultCode);
+
+                        } catch (Exception ex) {
+                            ex.printStackTrace();
+                        }
+                    }).start();
 
                     boardView.setDisable(true);
                     boardView.setMouseTransparent(true);
@@ -451,6 +504,13 @@ public class MainApp extends Application {
             prevBtn.setDisable(!state.getHistory().canPrev());
             nextBtn.setDisable(!state.getHistory().canNext());
             endBtn.setDisable(!state.getHistory().canNext());
+
+            updateBoardInputState(
+                    boardView,
+                    state,
+                    playerColor,
+                    gameOverByTime[0]
+            );
         };
 
         refreshRef[0] = refresh;
@@ -497,8 +557,110 @@ public class MainApp extends Application {
 
         refresh.run();
 
+        startRemoteMovePolling(
+                gameId,
+                boardView,
+                syncedMoveCount,
+                refreshRef
+        );
+
         Scene scene = new Scene(root, 1200, 820);
         primaryStage.setScene(scene);
+    }
+
+
+    private void startRemoteMovePolling(String gameId,
+                                        BoardView boardView,
+                                        int[] syncedMoveCount,
+                                        Runnable[] refreshRef) {
+
+        Thread pollingThread = new Thread(() -> {
+
+            com.proiectipdp.chess.client.ChessServerClient serverClient =
+                    new com.proiectipdp.chess.client.ChessServerClient(
+                            "http://localhost:8081"
+                    );
+
+            while (true) {
+
+                try {
+                    Thread.sleep(1000);
+
+                    String gameJson = serverClient.getGameState(gameId);
+
+                    if (gameJson == null || gameJson.equals("null")) {
+                        break;
+                    }
+
+                    java.util.List<com.proiectipdp.chess.client.ChessServerClient.ServerMove> serverMoves =
+                            serverClient.extractMovesFromGameJson(gameJson);
+
+                    if (serverMoves.size() > syncedMoveCount[0]) {
+
+                        java.util.List<com.proiectipdp.chess.client.ChessServerClient.ServerMove> movesToApply =
+                                new java.util.ArrayList<>(
+                                        serverMoves.subList(
+                                                syncedMoveCount[0],
+                                                serverMoves.size()
+                                        )
+                                );
+
+                        javafx.application.Platform.runLater(() -> {
+
+                            for (com.proiectipdp.chess.client.ChessServerClient.ServerMove remoteMove : movesToApply) {
+
+                                boolean applied = boardView.applyRemoteMove(
+                                        remoteMove.fromRow(),
+                                        remoteMove.fromCol(),
+                                        remoteMove.toRow(),
+                                        remoteMove.toCol()
+                                );
+
+                                if (applied) {
+                                    syncedMoveCount[0]++;
+
+                                    if (refreshRef[0] != null) {
+                                        refreshRef[0].run();
+                                    }
+                                } else {
+                                    System.out.println(
+                                            "Nu s-a putut aplica mutarea remote: " +
+                                                    remoteMove.fromRow() + "," +
+                                                    remoteMove.fromCol() + " -> " +
+                                                    remoteMove.toRow() + "," +
+                                                    remoteMove.toCol()
+                                    );
+                                }
+                            }
+                        });
+                    }
+
+                } catch (Exception ex) {
+                    ex.printStackTrace();
+                }
+            }
+        });
+
+        pollingThread.setDaemon(true);
+        pollingThread.start();
+    }
+
+    private void updateBoardInputState(BoardView boardView,
+                                       GameState state,
+                                       String playerColor,
+                                       boolean gameOver) {
+
+        if (gameOver) {
+            boardView.setDisable(true);
+            boardView.setMouseTransparent(true);
+            return;
+        }
+
+        boolean myTurn =
+                state.getTurn().name().equals(playerColor);
+
+        boardView.setDisable(!myTurn);
+        boardView.setMouseTransparent(!myTurn);
     }
 
     private void jumpToMove(GameState state, BoardView boardView, int targetMoveIndex) {

@@ -14,14 +14,18 @@ import javafx.scene.paint.Color;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.function.Consumer;
 
 public class BoardView extends GridPane {
+
+    public record MoveInfo(int fromRow, int fromCol, int toRow, int toCol) {}
 
     private static final Color LIGHT = Color.web("#D7D4D4");
     private static final Color DARK  = Color.web("#807B76");
     private static final int TILE_SIZE = 72;
 
     private Runnable onStateChanged;
+    private Consumer<MoveInfo> onMoveMade;
 
     private final StackPane[][] tiles = new StackPane[8][8];
     private final Map<Character, Image> pieceImages = new HashMap<>();
@@ -43,11 +47,21 @@ public class BoardView extends GridPane {
         return illegalMoveColor;
     }
 
-    public void setShowMoves(boolean value) { this.showMoves = value; }
-    public void setAllowIllegal(boolean value) { this.allowIllegal = value; }
+    public void setShowMoves(boolean value) {
+        this.showMoves = value;
+    }
 
-    public boolean hasIllegalMove() { return illegalMoveMade; }
-    public boolean isFlipped() { return flipped; }
+    public void setAllowIllegal(boolean value) {
+        this.allowIllegal = value;
+    }
+
+    public boolean hasIllegalMove() {
+        return illegalMoveMade;
+    }
+
+    public boolean isFlipped() {
+        return flipped;
+    }
 
     public void flipBoard() {
         flipped = !flipped;
@@ -56,6 +70,10 @@ public class BoardView extends GridPane {
 
     public void setOnStateChanged(Runnable onStateChanged) {
         this.onStateChanged = onStateChanged;
+    }
+
+    public void setOnMoveMade(Consumer<MoveInfo> onMoveMade) {
+        this.onMoveMade = onMoveMade;
     }
 
     public BoardView(GameState state, RulesEngine engine) {
@@ -148,22 +166,15 @@ public class BoardView extends GridPane {
                 ok = engine.tryMove(state, move);
             } else {
                 char piece = state.getBoard().get(fromRow, fromCol);
-                char captured = state.getBoard().get(toRow, toCol);
 
                 state.getBoard().set(toRow, toCol, piece);
                 state.getBoard().set(fromRow, fromCol, '#');
 
                 illegalMoveMade = true;
-
                 illegalMoveColor = RulesUtil.colorOf(piece).name();
-
-                // marcăm vizual mutarea ilegală
-                int displayToRow = flipped ? 7 - toRow : toRow;
-                int displayToCol = flipped ? 7 - toCol : toCol;
 
                 ok = true;
 
-                // schimbăm rândul manual
                 state.setTurn(
                         state.getTurn().name().equals("WHITE")
                                 ? com.proiectipdp.chess.core.Color.BLACK
@@ -180,26 +191,44 @@ public class BoardView extends GridPane {
         if (ok) {
             renderFromState();
 
+            if (onMoveMade != null) {
+                onMoveMade.accept(new MoveInfo(fromRow, fromCol, toRow, toCol));
+            }
 
-            if (onStateChanged != null) onStateChanged.run();
+            if (onStateChanged != null) {
+                onStateChanged.run();
+            }
         }
     }
+
+    public boolean applyRemoteMove(int fromRow, int fromCol, int toRow, int toCol) {
+
+        Move move = new Move(
+                new Position(fromRow, fromCol),
+                new Position(toRow, toCol),
+                null
+        );
+
+        boolean ok = engine.tryMove(state, move);
+
+        if (ok) {
+            deselect();
+            renderFromState();
+
+            if (onStateChanged != null) {
+                onStateChanged.run();
+            }
+        }
+
+        return ok;
+    }
+
     private void select(int row, int col) {
         deselect();
 
         selectedRow = row;
         selectedCol = col;
 
-        int displayRow = flipped ? 7 - row : row;
-        int displayCol = flipped ? 7 - col : col;
-        /*
-        tiles[displayRow][displayCol].setBorder(new Border(
-                new BorderStroke(Color.web("#F2C14E"),
-                        BorderStrokeStyle.SOLID,
-                        CornerRadii.EMPTY,
-                        new BorderWidths(3))
-        ));
-       */
         if (showMoves) {
             highlightMoves(row, col);
         }
@@ -210,7 +239,6 @@ public class BoardView extends GridPane {
         selectedRow = -1;
         selectedCol = -1;
     }
-
 
     private void highlightMoves(int row, int col) {
 
@@ -266,10 +294,12 @@ public class BoardView extends GridPane {
 
     private Image load(String path) {
         var stream = getClass().getResourceAsStream(path);
+
         if (stream == null) {
             System.out.println("NU gasesc: " + path);
             return null;
         }
+
         return new Image(stream);
     }
 
@@ -289,6 +319,12 @@ public class BoardView extends GridPane {
         pieceImages.put('q', load("/PieseSah/black_queen.png"));
         pieceImages.put('k', load("/PieseSah/black_king.png"));
     }
-    public void forceRender() { renderFromState(); }
-    public void deselectForExternal() { deselect(); }
+
+    public void forceRender() {
+        renderFromState();
+    }
+
+    public void deselectForExternal() {
+        deselect();
+    }
 }
