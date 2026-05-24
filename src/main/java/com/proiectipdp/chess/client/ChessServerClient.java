@@ -1,7 +1,9 @@
 package com.proiectipdp.chess.client;
 
 import java.net.URI;
-import java.net.http.*;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -21,11 +23,10 @@ public class ChessServerClient {
     }
 
     public String joinGame(String playerId) throws Exception {
-        String json = """
-                {
-                  "id": "%s"
-                }
-                """.formatted(playerId);
+        String json =
+                "{\n" +
+                        "  \"id\": \"" + playerId + "\"\n" +
+                        "}";
 
         return post("/game/join", json);
     }
@@ -47,15 +48,14 @@ public class ChessServerClient {
                            int toRow,
                            int toCol) throws Exception {
 
-        String json = """
-                {
-                  "playerId": "%s",
-                  "fromRow": %d,
-                  "fromCol": %d,
-                  "toRow": %d,
-                  "toCol": %d
-                }
-                """.formatted(playerId, fromRow, fromCol, toRow, toCol);
+        String json =
+                "{\n" +
+                        "  \"playerId\": \"" + playerId + "\",\n" +
+                        "  \"fromRow\": " + fromRow + ",\n" +
+                        "  \"fromCol\": " + fromCol + ",\n" +
+                        "  \"toRow\": " + toRow + ",\n" +
+                        "  \"toCol\": " + toCol + "\n" +
+                        "}";
 
         return post("/game/" + gameId + "/move", json);
     }
@@ -111,25 +111,7 @@ public class ChessServerClient {
     }
 
     public String extractGameIdFromJson(String json) {
-        if (json == null || json.equals("null")) {
-            return null;
-        }
-
-        String search = "\"gameId\":\"";
-        int start = json.indexOf(search);
-
-        if (start == -1) {
-            return null;
-        }
-
-        start += search.length();
-        int end = json.indexOf("\"", start);
-
-        if (end == -1) {
-            return null;
-        }
-
-        return json.substring(start, end);
+        return extractStringField(json, "gameId");
     }
 
     public String determinePlayerColor(String gameJson, String playerId) {
@@ -137,14 +119,14 @@ public class ChessServerClient {
             return "WHITE";
         }
 
-        String player1Pattern = "\"player1\":{\"id\":\"" + playerId + "\"";
-        String player2Pattern = "\"player2\":{\"id\":\"" + playerId + "\"";
+        String player1Id = extractNestedPlayerId(gameJson, "player1");
+        String player2Id = extractNestedPlayerId(gameJson, "player2");
 
-        if (gameJson.contains(player1Pattern)) {
+        if (playerId.equals(player1Id)) {
             return "WHITE";
         }
 
-        if (gameJson.contains(player2Pattern)) {
+        if (playerId.equals(player2Id)) {
             return "BLACK";
         }
 
@@ -158,19 +140,42 @@ public class ChessServerClient {
             return moves;
         }
 
+        int movesIndex = json.indexOf("\"moves\":[");
+
+        if (movesIndex == -1) {
+            return moves;
+        }
+
+        int arrayStart = json.indexOf("[", movesIndex);
+        int arrayEnd = findMatchingBracket(json, arrayStart);
+
+        if (arrayStart == -1 || arrayEnd == -1) {
+            return moves;
+        }
+
+        String movesArray = json.substring(arrayStart + 1, arrayEnd);
+
         int index = 0;
 
         while (true) {
-            int fromRowIndex = json.indexOf("\"fromRow\":", index);
+            int objectStart = movesArray.indexOf("{", index);
 
-            if (fromRowIndex == -1) {
+            if (objectStart == -1) {
                 break;
             }
 
-            Integer fromRow = extractIntAfter(json, "\"fromRow\":", fromRowIndex);
-            Integer fromCol = extractIntAfter(json, "\"fromCol\":", fromRowIndex);
-            Integer toRow = extractIntAfter(json, "\"toRow\":", fromRowIndex);
-            Integer toCol = extractIntAfter(json, "\"toCol\":", fromRowIndex);
+            int objectEnd = movesArray.indexOf("}", objectStart);
+
+            if (objectEnd == -1) {
+                break;
+            }
+
+            String moveObject = movesArray.substring(objectStart + 1, objectEnd);
+
+            Integer fromRow = extractIntField(moveObject, "fromRow");
+            Integer fromCol = extractIntField(moveObject, "fromCol");
+            Integer toRow = extractIntField(moveObject, "toRow");
+            Integer toCol = extractIntField(moveObject, "toCol");
 
             if (fromRow != null &&
                     fromCol != null &&
@@ -187,29 +192,55 @@ public class ChessServerClient {
                 );
             }
 
-            index = fromRowIndex + 1;
+            index = objectEnd + 1;
         }
 
         return moves;
     }
 
-    private Integer extractIntAfter(String text, String field, int startFrom) {
-        int start = text.indexOf(field, startFrom);
+    private int findMatchingBracket(String text, int openIndex) {
+        if (openIndex == -1) {
+            return -1;
+        }
+
+        int depth = 0;
+
+        for (int i = openIndex; i < text.length(); i++) {
+            char ch = text.charAt(i);
+
+            if (ch == '[') {
+                depth++;
+            } else if (ch == ']') {
+                depth--;
+
+                if (depth == 0) {
+                    return i;
+                }
+            }
+        }
+
+        return -1;
+    }
+
+    private Integer extractIntField(String jsonObject, String fieldName) {
+        String search = "\"" + fieldName + "\":";
+        int start = jsonObject.indexOf(search);
 
         if (start == -1) {
             return null;
         }
 
-        start += field.length();
+        start += search.length();
 
-        while (start < text.length() && Character.isWhitespace(text.charAt(start))) {
+        while (start < jsonObject.length() &&
+                Character.isWhitespace(jsonObject.charAt(start))) {
             start++;
         }
 
         int end = start;
 
-        while (end < text.length()) {
-            char ch = text.charAt(end);
+        while (end < jsonObject.length()) {
+            char ch = jsonObject.charAt(end);
 
             if (!Character.isDigit(ch) && ch != '-') {
                 break;
@@ -222,7 +253,55 @@ public class ChessServerClient {
             return null;
         }
 
-        return Integer.parseInt(text.substring(start, end));
+        return Integer.parseInt(jsonObject.substring(start, end));
+    }
+
+    private String extractNestedPlayerId(String json, String playerField) {
+        String search = "\"" + playerField + "\":";
+        int playerIndex = json.indexOf(search);
+
+        if (playerIndex == -1) {
+            return null;
+        }
+
+        int idIndex = json.indexOf("\"id\":\"", playerIndex);
+
+        if (idIndex == -1) {
+            return null;
+        }
+
+        idIndex += "\"id\":\"".length();
+
+        int end = json.indexOf("\"", idIndex);
+
+        if (end == -1) {
+            return null;
+        }
+
+        return json.substring(idIndex, end);
+    }
+
+    private String extractStringField(String json, String fieldName) {
+        if (json == null || json.equals("null")) {
+            return null;
+        }
+
+        String search = "\"" + fieldName + "\":\"";
+        int start = json.indexOf(search);
+
+        if (start == -1) {
+            return null;
+        }
+
+        start += search.length();
+
+        int end = json.indexOf("\"", start);
+
+        if (end == -1) {
+            return null;
+        }
+
+        return json.substring(start, end);
     }
 
     private String post(String path, String json) throws Exception {
