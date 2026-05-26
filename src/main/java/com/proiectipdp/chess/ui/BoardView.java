@@ -133,6 +133,8 @@ public class BoardView extends GridPane {
         if (selectedRow == -1) {
 
             if (clicked == '#') return;
+
+            // Respectam tura chiar si in modul de mutari ilegale.
             if (RulesUtil.colorOf(clicked) != state.getTurn()) return;
 
             select(realRow, realCol);
@@ -165,21 +167,7 @@ public class BoardView extends GridPane {
             if (legal) {
                 ok = engine.tryMove(state, move);
             } else {
-                char piece = state.getBoard().get(fromRow, fromCol);
-
-                state.getBoard().set(toRow, toCol, piece);
-                state.getBoard().set(fromRow, fromCol, '#');
-
-                illegalMoveMade = true;
-                illegalMoveColor = RulesUtil.colorOf(piece).name();
-
-                ok = true;
-
-                state.setTurn(
-                        state.getTurn().name().equals("WHITE")
-                                ? com.proiectipdp.chess.core.Color.BLACK
-                                : com.proiectipdp.chess.core.Color.WHITE
-                );
+                ok = forceMove(fromRow, fromCol, toRow, toCol);
             }
 
         } else {
@@ -211,6 +199,10 @@ public class BoardView extends GridPane {
 
         boolean ok = engine.tryMove(state, move);
 
+        if (!ok && allowIllegal) {
+            ok = forceMove(fromRow, fromCol, toRow, toCol);
+        }
+
         if (ok) {
             deselect();
             renderFromState();
@@ -221,6 +213,29 @@ public class BoardView extends GridPane {
         }
 
         return ok;
+    }
+
+    private boolean forceMove(int fromRow, int fromCol, int toRow, int toCol) {
+
+        char piece = state.getBoard().get(fromRow, fromCol);
+
+        if (piece == '#') {
+            return false;
+        }
+
+        illegalMoveMade = true;
+        illegalMoveColor = RulesUtil.colorOf(piece).name();
+
+        state.getBoard().set(toRow, toCol, piece);
+        state.getBoard().set(fromRow, fromCol, '#');
+
+        state.setTurn(
+                state.getTurn().name().equals("WHITE")
+                        ? com.proiectipdp.chess.core.Color.BLACK
+                        : com.proiectipdp.chess.core.Color.WHITE
+        );
+
+        return true;
     }
 
     private void select(int row, int col) {

@@ -16,6 +16,7 @@ public class GameSettingsView {
 
     private int selectedTime = 10; // default
     private String selectedColor = "WHITE"; // default
+    private boolean allowIllegalMoves = false; // default
 
 
     public GameSettingsView(MainApp mainApp) {
@@ -204,8 +205,24 @@ public class GameSettingsView {
         colorPanel.setPrefWidth(215);
         colorPanel.setStyle(innerPanelStyle);
 
+        // ===== EXTRA OPTIONS =====
+        CheckBox allowIllegalCheck = new CheckBox("Allow illegal moves");
+        styleCheckBox(allowIllegalCheck);
+
+        Label illegalInfo = new Label("Permite mutări ilegale pentru testare/demo");
+        illegalInfo.setStyle(smallInfoStyle);
+
+        allowIllegalCheck.setOnAction(e -> {
+            allowIllegalMoves = allowIllegalCheck.isSelected();
+        });
+
+        VBox illegalPanel = new VBox(8, allowIllegalCheck, illegalInfo);
+        illegalPanel.setAlignment(Pos.CENTER_LEFT);
+        illegalPanel.setPrefWidth(215);
+        illegalPanel.setStyle(innerPanelStyle);
+
         // ===== OPTIONS BOX =====
-        HBox optionsBox = new HBox(22, timePanel, colorPanel);
+        HBox optionsBox = new HBox(22, timePanel, colorPanel, illegalPanel);
         optionsBox.setAlignment(Pos.CENTER);
 
         // ===== START BUTTON =====
@@ -242,7 +259,7 @@ public class GameSettingsView {
                         String assignedColor = serverClient.determinePlayerColor(gameJson, playerId);
 
                         javafx.application.Platform.runLater(() -> {
-                            mainApp.showGame(selectedTime, assignedColor, gameId, playerId);
+                            mainApp.showGame(selectedTime, assignedColor, gameId, playerId, allowIllegalMoves);
                         });
 
                         return;
@@ -272,7 +289,7 @@ public class GameSettingsView {
                                 System.out.println("Culoare asignată: " + assignedColor);
 
                                 javafx.application.Platform.runLater(() -> {
-                                    mainApp.showGame(selectedTime, assignedColor, gameId, playerId);
+                                    mainApp.showGame(selectedTime, assignedColor, gameId, playerId, allowIllegalMoves);
                                 });
 
                                 break;
@@ -317,7 +334,7 @@ public class GameSettingsView {
         // ===== CARD =====
         VBox card = new VBox(28, titleBox, optionsBox, startBtn, footer);
         card.setAlignment(Pos.CENTER);
-        card.setMaxWidth(610);
+        card.setMaxWidth(850);
         card.setStyle(cardStyle);
 
         DropShadow cardShadow = new DropShadow();
@@ -352,11 +369,22 @@ public class GameSettingsView {
 
         stack.getChildren().addAll(glow1, glow2, root);
 
-        scene = new Scene(stack, 900, 650);
+        scene = new Scene(stack, 1050, 650);
     }
 
     public Scene getScene() {
         return scene;
+    }
+
+    private void styleCheckBox(CheckBox checkBox) {
+        checkBox.setStyle(
+                "-fx-font-size: 14px;" +
+                        "-fx-text-fill: #f1f1f1;" +
+                        "-fx-cursor: hand;" +
+                        "-fx-mark-color: #f4d27a;" +
+                        "-fx-focus-color: transparent;" +
+                        "-fx-faint-focus-color: transparent;"
+        );
     }
 
     private void styleRadioButton(RadioButton radioButton) {

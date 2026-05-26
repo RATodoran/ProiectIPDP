@@ -45,7 +45,7 @@ public class MainApp extends Application {
         stage.show();
     }
 
-    public void showGame(int minutes, String color, String gameId, String playerId) {
+    public void showGame(int minutes, String color, String gameId, String playerId, boolean allowIllegalMoves) {
 
         GameState state = new GameState();
         RulesEngine engine = new RulesEngine();
@@ -57,6 +57,7 @@ public class MainApp extends Application {
         final int[] syncedMoveCount = {0};
 
         BoardView boardView = new BoardView(state, engine);
+        boardView.setAllowIllegal(allowIllegalMoves);
 
         boardView.setOnMoveMade(moveInfo -> {
 
@@ -273,14 +274,53 @@ public class MainApp extends Application {
         Button drawBtn = new Button("Remiză");
         drawBtn.setOnAction(e -> {
 
-            Alert alert = new Alert(Alert.AlertType.INFORMATION);
+            Alert confirm = new Alert(Alert.AlertType.CONFIRMATION);
 
-            alert.setTitle("Cerere de remiză");
-            alert.setHeaderText(null);
-            alert.setContentText("Remiză cerută.\nAșteaptă reacția adversarului.");
+            confirm.setTitle("Confirmare remiză");
+            confirm.setHeaderText("Sigur dorești remiză?");
+            confirm.setContentText("Partida se va termina și ceasul se va opri.");
 
-            alert.showAndWait();
+            ButtonType yes = new ButtonType("Da");
+            ButtonType no = new ButtonType("Nu");
+
+            confirm.getButtonTypes().setAll(yes, no);
+
+            confirm.showAndWait().ifPresent(response -> {
+
+                if (response == yes) {
+
+                    finishLocalGame(
+                            boardView,
+                            timerRef,
+                            gameOverByTime,
+                            statusLabel,
+                            "Remiză!",
+                            "#BBBBBB"
+                    );
+
+                    new Thread(() -> {
+                        try {
+                            com.proiectipdp.chess.client.ChessServerClient serverClient =
+                                    new com.proiectipdp.chess.client.ChessServerClient("http://localhost:8081");
+
+                            String serverResponse = serverClient.endGame(gameId, "DRAW");
+                            System.out.println("Răspuns remiză: " + serverResponse);
+
+                        } catch (Exception ex) {
+                            ex.printStackTrace();
+                        }
+                    }).start();
+
+                    Alert alert = new Alert(Alert.AlertType.INFORMATION);
+                    alert.setTitle("Final de joc");
+                    alert.setHeaderText(null);
+                    alert.setContentText("Partida s-a terminat remiză.");
+
+                    alert.showAndWait();
+                }
+            });
         });
+
         Button resignBtn = new Button("Cedează");
         resignBtn.setOnAction(e -> {
 
@@ -310,23 +350,27 @@ public class MainApp extends Application {
                         resultCode = "WHITE_WIN";
                     }
 
+                    finishLocalGame(
+                            boardView,
+                            timerRef,
+                            gameOverByTime,
+                            statusLabel,
+                            winner + " câștigă prin cedare!",
+                            "#F2C14E"
+                    );
+
                     new Thread(() -> {
                         try {
                             com.proiectipdp.chess.client.ChessServerClient serverClient =
                                     new com.proiectipdp.chess.client.ChessServerClient("http://localhost:8081");
 
-                            serverClient.endGame(gameId, resultCode);
+                            String serverResponse = serverClient.endGame(gameId, resultCode);
+                            System.out.println("Răspuns cedare: " + serverResponse);
 
                         } catch (Exception ex) {
                             ex.printStackTrace();
                         }
                     }).start();
-
-                    boardView.setDisable(true);
-                    boardView.setMouseTransparent(true);
-
-                    statusLabel.setText(winner + " câștigă prin cedare!");
-                    statusLabel.setTextFill(Color.web("#F2C14E"));
 
                     Alert result = new Alert(Alert.AlertType.INFORMATION);
 
@@ -359,14 +403,8 @@ public class MainApp extends Application {
         styleNavButton(endBtn);
 
         CheckBox highlightMoves = new CheckBox("Highlight moves");
-        CheckBox allowIllegal = new CheckBox("Allow illegal moves");
-
         styleCheckBox(highlightMoves);
-        styleCheckBox(allowIllegal);
-
         highlightMoves.setOnAction(e -> boardView.setShowMoves(highlightMoves.isSelected()));
-        allowIllegal.setOnAction(e -> boardView.setAllowIllegal(allowIllegal.isSelected()));
-
         flagBtn.setOnAction(e -> {
             if (boardView.hasIllegalMove()) {
                 String illegalColor = boardView.getIllegalMoveColor();
@@ -399,7 +437,7 @@ public class MainApp extends Application {
         HBox controls = new HBox(10, drawBtn, resignBtn, flagBtn, flipBtn);
         controls.setAlignment(Pos.CENTER);
 
-        HBox toggles = new HBox(14, highlightMoves, allowIllegal);
+        HBox toggles = new HBox(14, highlightMoves);
         toggles.setAlignment(Pos.CENTER);
 
         HBox navigation = new HBox(8, startBtn, prevBtn, nextBtn, endBtn);
@@ -484,6 +522,19 @@ public class MainApp extends Application {
             if (!gameOverByTime[0]) {
                 statusLabel.setText(statusText(state.getStatus()));
                 statusLabel.setTextFill(statusColor(state.getStatus()));
+
+                if (state.getStatus() == GameStatus.CHECKMATE ||
+                        state.getStatus() == GameStatus.STALEMATE) {
+
+                    gameOverByTime[0] = true;
+
+                    if (timerRef[0] != null) {
+                        timerRef[0].stop();
+                    }
+
+                    boardView.setDisable(true);
+                    boardView.setMouseTransparent(true);
+                }
             }
 
             List<String> moves = state.getMoveLog();
@@ -561,7 +612,10 @@ public class MainApp extends Application {
                 gameId,
                 boardView,
                 syncedMoveCount,
-                refreshRef
+                refreshRef,
+                gameOverByTime,
+                timerRef,
+                statusLabel
         );
 
         Scene scene = new Scene(root, 1200, 820);
@@ -569,10 +623,33 @@ public class MainApp extends Application {
     }
 
 
+    private void finishLocalGame(BoardView boardView,
+                                 Timeline[] timerRef,
+                                 boolean[] gameOverByTime,
+                                 Label statusLabel,
+                                 String message,
+                                 String colorHex) {
+
+        gameOverByTime[0] = true;
+
+        if (timerRef[0] != null) {
+            timerRef[0].stop();
+        }
+
+        boardView.setDisable(true);
+        boardView.setMouseTransparent(true);
+
+        statusLabel.setText(message);
+        statusLabel.setTextFill(Color.web(colorHex));
+    }
+
     private void startRemoteMovePolling(String gameId,
                                         BoardView boardView,
                                         int[] syncedMoveCount,
-                                        Runnable[] refreshRef) {
+                                        Runnable[] refreshRef,
+                                        boolean[] gameOverByTime,
+                                        Timeline[] timerRef,
+                                        Label statusLabel) {
 
         Thread pollingThread = new Thread(() -> {
 
@@ -586,9 +663,27 @@ public class MainApp extends Application {
                 try {
                     Thread.sleep(1000);
 
+                    if (gameOverByTime[0]) {
+                        break;
+                    }
+
                     String gameJson = serverClient.getGameState(gameId);
 
-                    if (gameJson == null || gameJson.equals("null")) {
+                    if (gameJson == null ||
+                            gameJson.equals("null") ||
+                            gameJson.isBlank()) {
+
+                        javafx.application.Platform.runLater(() -> {
+                            finishLocalGame(
+                                    boardView,
+                                    timerRef,
+                                    gameOverByTime,
+                                    statusLabel,
+                                    "Partida s-a terminat!",
+                                    "#F2C14E"
+                            );
+                        });
+
                         break;
                     }
 
@@ -636,7 +731,20 @@ public class MainApp extends Application {
                     }
 
                 } catch (Exception ex) {
-                    ex.printStackTrace();
+                    System.out.println("Polling oprit sau server indisponibil: " + ex.getMessage());
+
+                    javafx.application.Platform.runLater(() -> {
+                        finishLocalGame(
+                                boardView,
+                                timerRef,
+                                gameOverByTime,
+                                statusLabel,
+                                "Conexiune pierdută / joc terminat",
+                                "#F2C14E"
+                        );
+                    });
+
+                    break;
                 }
             }
         });
