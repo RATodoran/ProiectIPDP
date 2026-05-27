@@ -409,19 +409,44 @@ public class MainApp extends Application {
             if (boardView.hasIllegalMove()) {
                 String illegalColor = boardView.getIllegalMoveColor();
                 String winner;
+                String resultCode;
 
                 if ("WHITE".equals(illegalColor)) {
                     winner = "Negru";
+                    resultCode = "BLACK_WIN";
                 } else {
                     winner = "Alb";
+                    resultCode = "WHITE_WIN";
                 }
 
-                new Alert(Alert.AlertType.INFORMATION,
-                        winner + " a câștigat! A fost semnalată o mutare ilegală.")
-                        .showAndWait();
+                finishLocalGame(
+                        boardView,
+                        timerRef,
+                        gameOverByTime,
+                        statusLabel,
+                        winner + " câștigă prin flag!",
+                        "#F2C14E"
+                );
 
-                boardView.setDisable(true);
-                boardView.setMouseTransparent(true);
+                new Thread(() -> {
+                    try {
+                        com.proiectipdp.chess.client.ChessServerClient serverClient =
+                                new com.proiectipdp.chess.client.ChessServerClient("http://localhost:8081");
+
+                        String serverResponse = serverClient.endGame(gameId, resultCode);
+                        System.out.println("Răspuns flag: " + serverResponse);
+
+                    } catch (Exception ex) {
+                        ex.printStackTrace();
+                    }
+                }).start();
+
+                Alert alert = new Alert(Alert.AlertType.INFORMATION);
+                alert.setTitle("Final de joc");
+                alert.setHeaderText(null);
+                alert.setContentText(winner + " a câștigat! A fost semnalată o mutare ilegală.");
+                alert.showAndWait();
+
             } else {
                 new Alert(Alert.AlertType.INFORMATION,
                         "Nu există mutare ilegală de semnalat.")
